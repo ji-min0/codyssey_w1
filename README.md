@@ -534,7 +534,7 @@ commit 738cd81 ...
 
 - [x] Compose 기초 (단일 서비스)
 - [x] Compose 멀티 컨테이너 + 네트워크 통신
-- [ ] Compose 운영 명령 (up/down/ps/logs)
+- [x] Compose 운영 명령 (up/down/ps/logs)
 - [ ] 환경 변수로 포트/모드 변경
 - [ ] GitHub SSH 키 설정
 
@@ -628,3 +628,30 @@ cache (192.168.97.3:6379) open
 **관찰**: `cache`라는 서비스 이름이 실제 컨테이너의 IP(`192.168.97.3`)로 자동 해석(DNS)됐고, ping과
 redis 포트(6379) 접속까지 성공했다. 컨테이너 IP는 재시작할 때마다 바뀔 수 있지만, compose 네트워크의
 서비스 디스커버리 덕분에 코드/설정에서는 IP 대신 `cache`라는 이름만 알면 된다.
+
+### 13-C. Compose 운영 명령 (up / ps / logs / down)
+
+```bash
+$ docker compose logs --tail=10 web
+my-web  | 2026/07/30 08:42:09 [notice] 1#1: start worker processes
+my-web  | 2026/07/30 08:42:09 [notice] 1#1: start worker process 30
+...
+my-web  | 192.168.97.1 - - [30/Jul/2026:08:42:10 +0000] "GET / HTTP/1.1" 200 385 "-" "curl/8.7.1" "-"
+
+$ docker compose logs --tail=5 cache
+my-cache  | 1:M 30 Jul 2026 08:44:09.803 * Ready to accept connections tcp
+my-cache  | 1:M 30 Jul 2026 08:44:09.803 # WARNING: Redis does not require authentication...
+
+$ docker compose down
+ Container my-web    Stopped / Removed
+ Container my-cache  Stopped / Removed
+ Network codyssey_w1_default  Removed
+
+$ docker compose ps
+NAME   IMAGE   COMMAND   SERVICE   CREATED   STATUS   PORTS
+(없음 — down 이후 서비스 전부 정리됨)
+```
+
+**정리한 운영 루틴**: `up -d`(기동) → `ps`(살아있는지 확인) → `logs`(정상 동작/에러 확인) → 필요시
+`down`(컨테이너+네트워크까지 한 번에 정리). 개별 컨테이너를 `docker stop/rm`으로 하나씩 정리하는 대신,
+compose 단위로 전체 스택의 상태를 일관되게 확인·정리할 수 있었다.
