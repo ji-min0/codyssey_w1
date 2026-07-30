@@ -47,11 +47,11 @@ Docker version 28.5.2, build ecc6942
 - [x] attach vs exec 차이 관찰
 - [x] Dockerfile 기반 커스텀 이미지 (nginx:alpine + 정적 콘텐츠)
 - [x] 포트 매핑 브라우저 접속 증거
-- [ ] 바인드 마운트 전/후 비교 (진행 예정)
-- [ ] Docker 볼륨 영속성 검증 (진행 예정)
+- [x] 바인드 마운트 전/후 비교
+- [x] Docker 볼륨 영속성 검증
 - [x] Git 사용자 정보 명시적 설정 + `git config --list` 기록
 - [x] VSCode에서 GitHub 로그인 및 저장소 연동
-- [x] 트러블슈팅 1건 이상 기록 (2건 목표, 1건 완료)
+- [x] 트러블슈팅 2건 이상 기록
 
 ## 4. 터미널 조작 로그
 
@@ -368,29 +368,74 @@ $ curl http://localhost:8080
 
 ## 10. 바인드 마운트 & 볼륨 영속성 검증
 
-> TODO — 아래 절차대로 진행 후 전/후 캡처 첨부 예정
+### 10-A. 바인드 마운트 (호스트 변경 → 컨테이너 재시작 없이 즉시 반영 확인)
 
-### 10-A. 바인드 마운트 (호스트 변경 → 즉시 반영 확인)
+호스트의 디렉토리를 nginx 컨테이너에 마운트한 뒤, 컨테이너를 재시작하지 않고 호스트 파일만 수정해서
+바로 반영되는지 확인했다.
 
 ```bash
-$ docker run -d --name bind-web -p 8081:80 -v $(pwd)/app:/usr/share/nginx/html nginx:alpine
-# 변경 전: http://localhost:8081 접속 캡처
-# app/index.html 수정 후
-# 변경 후: 새로고침 → 반영 확인 캡처
+$ docker run -d --name bind-web -p 8081:80 -v <host_dir>:/usr/share/nginx/html nginx:alpine
+4221a906f49bc28c67f7f379264efc106d4b7217ac7e241facfb78d391d45682
+
+# --- 변경 전 ---
+$ curl -s http://localhost:8081
+<h1>bind mount BEFORE host edit</h1>
+
+# --- 호스트에서 index.html 내용을 직접 수정 (컨테이너는 재시작하지 않음) ---
+$ echo '<h1>bind mount AFTER host edit - reflected without restart</h1>' > <host_dir>/index.html
+
+# --- 변경 후: 같은 컨테이너, 같은 요청인데 내용이 즉시 바뀜 ---
+$ curl -s http://localhost:8081
+<h1>bind mount AFTER host edit - reflected without restart</h1>
+
+$ docker ps --filter name=bind-web --format "table {{.Names}}\t{{.Status}}"
+NAMES      STATUS
+bind-web   Up 6 seconds   # 재시작 없이 같은 컨테이너로 반영됨을 확인
+
+$ docker rm -f bind-web
 ```
+
+**관찰**: 바인드 마운트는 호스트 디렉토리를 컨테이너 내부 경로에 그대로 연결하는 방식이라, 컨테이너를
+재빌드·재시작하지 않고 호스트에서 파일만 바꿔도 즉시 반영된다.
 
 ### 10-B. Docker 볼륨 (컨테이너 삭제 후에도 데이터 유지)
 
 ```bash
 $ docker volume create my-data
-$ docker run -it --name vol-test -v my-data:/data ubuntu bash
-# echo "지워지지 않는 데이터" > /data/proof.txt && cat /data/proof.txt
+my-data
 
+$ docker volume ls
+DRIVER    VOLUME NAME
+local     my-data
+
+$ docker run -d --name vol-test -v my-data:/data ubuntu sleep infinity
+e88074fadc6a9570847bad50ca2488f2d1b84060e82e62a68ff1487233960c0a
+
+$ docker exec vol-test sh -c 'echo "이 데이터는 컨테이너를 지워도 살아남는다" > /data/proof.txt && cat /data/proof.txt'
+이 데이터는 컨테이너를 지워도 살아남는다
+
+# --- 컨테이너를 완전히 삭제 ---
 $ docker rm -f vol-test
+vol-test
 
-$ docker run -it --name vol-test2 -v my-data:/data ubuntu bash
-# cat /data/proof.txt  → 삭제 전과 동일한 내용 확인
+$ docker ps -a --filter name=vol-test
+CONTAINER ID   IMAGE   COMMAND   CREATED   STATUS   PORTS   NAMES
+(없음 — vol-test 컨테이너가 완전히 사라짐)
+
+# --- 같은 볼륨을 새 컨테이너에 연결 ---
+$ docker run -d --name vol-test2 -v my-data:/data ubuntu sleep infinity
+b918e4c2854aedf28c4b05d502840addd979b2ddda1118bb1ab1e5d20b7230c4
+
+$ docker exec vol-test2 cat /data/proof.txt
+이 데이터는 컨테이너를 지워도 살아남는다   # 삭제 전과 동일한 내용 확인 → 데이터 영속성 증명
+
+$ docker rm -f vol-test2
+$ docker volume rm my-data
 ```
+
+**관찰**: 컨테이너의 파일시스템은 컨테이너 삭제와 함께 사라지는 휘발성 저장소이지만, 볼륨은 Docker가
+호스트 쪽에 별도로 관리하는 저장소라 컨테이너의 생명주기와 분리된다. `vol-test`를 완전히 삭제한 뒤에도
+동일한 볼륨을 연결한 `vol-test2`에서 같은 데이터를 그대로 읽을 수 있었다.
 
 ## 11. Git / GitHub / VSCode 연동
 
@@ -464,8 +509,19 @@ commit 738cd81 ...
   종료 → 컨테이너가 정상적으로 `Exited` 상태가 됨을 확인. 동일 컨테이너에 `exec -it ... exit`을 했을 때는
   컨테이너가 살아있는 것과 비교해 attach/exec의 차이를 확인했다. (관련 캡처: 7번 섹션)
 
-### 트러블슈팅 2
+### 트러블슈팅 2: `git commit --amend`가 서로 다른 두 커밋을 하나로 합쳐버림
 
-> TODO — 실습 중 겪은 다른 오류 1건을 같은 형식(문제 → 원인 가설 → 확인 → 해결/대안)으로 기록한다.
-> 후보: 포트 충돌(port is already allocated), 컨테이너 이름 중복(name already in use),
-> 바인드 마운트 경로 오타로 빈 페이지가 뜨는 경우 등.
+- **문제**: 이미 커밋된 두 개의 커밋(A: 포트 매핑 기록, B: git config 기록) 중 A의 메시지만 한 줄 형식으로
+  고치려고 `git reset --soft HEAD~1`(B의 변경사항을 staged 상태로 되돌림) 후 `git commit --amend -m "..."`를
+  실행했는데, 커밋 후 확인해보니 A 하나에 A+B의 변경사항이 모두 들어가 있고 커밋이 1개로 줄어들어 있었다.
+- **원인 가설**: `git commit --amend`는 메시지만 바꾸는 명령이 아니라 **현재 staging area 상태를 그대로
+  포함해서** 직전 커밋을 다시 만드는 명령이라는 것을 놓쳤다. `reset --soft`로 B의 변경사항이 이미 staged된
+  상태였기 때문에, amend가 그 staged 내용까지 A 커밋에 합쳐버린 것으로 추정.
+- **확인**: `git show --stat HEAD`로 amend 직후 커밋을 확인하니 원래 A 혼자였을 때보다 변경 파일 수·라인 수가
+  더 많았고(README.md 외 diff가 늘어남), `git status`에는 아무 것도 남아있지 않아 B의 변경사항이 통째로
+  A에 흡수된 것을 확인했다.
+- **해결/대안**: 두 커밋 모두 아직 push 되지 않은 로컬 커밋이라 안전하게 되돌릴 수 있었다. `git reflog`로
+  amend 이전의 원본 커밋 해시(A, B 각각)를 찾은 뒤, `git reset --hard <원본 A 해시>`로 정확히 A 상태로
+  복원하고 `git commit --amend -m "..."`로 메시지만 교체(이때는 staging area가 비어 있어 내용이 섞이지
+  않음)했다. 이어서 `git cherry-pick --no-commit <원본 B 해시>`로 B의 변경사항만 다시 가져와 별도 커밋으로
+  분리했다. 교훈: 커밋을 amend하기 전에는 반드시 `git status`로 staging area가 비어 있는지 먼저 확인한다.
