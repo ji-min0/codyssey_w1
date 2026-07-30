@@ -533,7 +533,7 @@ commit 738cd81 ...
 ## 13. 보너스
 
 - [x] Compose 기초 (단일 서비스)
-- [ ] Compose 멀티 컨테이너 + 네트워크 통신
+- [x] Compose 멀티 컨테이너 + 네트워크 통신
 - [ ] Compose 운영 명령 (up/down/ps/logs)
 - [ ] 환경 변수로 포트/모드 변경
 - [ ] GitHub SSH 키 설정
@@ -575,3 +575,56 @@ $ curl -s http://localhost:8080
 
 **배운 점**: `docker run -p 8080:80 my-web:1.0` 같은 1회성 실행 명령이 `docker-compose.yml`이라는
 파일 하나로 문서화되어, 누구나 같은 명령(`docker compose up`) 한 번으로 동일한 환경을 재현할 수 있게 된다.
+
+### 13-B. 멀티 컨테이너 + 네트워크 통신
+
+`web` 서비스에 `cache`(redis:alpine) 서비스를 추가했다. 두 서비스는 compose가 자동으로 만들어주는
+같은 브리지 네트워크에 속하므로, 서로 IP 대신 **서비스 이름**으로 통신할 수 있는지 확인했다.
+
+`docker-compose.yml` (추가분):
+
+```yaml
+services:
+  web:
+    build: .
+    container_name: my-web
+    ports:
+      - "8080:80"
+    environment:
+      - SERVICE_NAME=web
+    depends_on:
+      - cache
+
+  cache:
+    image: redis:alpine
+    container_name: my-cache
+```
+
+```bash
+$ docker compose up -d
+ Container my-cache  Started
+ Container my-web  Running
+
+$ docker compose ps
+NAME       IMAGE             SERVICE   STATUS          PORTS
+my-cache   redis:alpine      cache     Up              6379/tcp
+my-web     codyssey_w1-web   web       Up              0.0.0.0:8080->80/tcp
+
+# --- web 컨테이너 안에서 cache 라는 이름으로 접근 가능한지 확인 ---
+$ docker compose exec web getent hosts cache
+192.168.97.3      cache  cache
+
+$ docker compose exec web ping -c 2 cache
+PING cache (192.168.97.3): 56 data bytes
+64 bytes from 192.168.97.3: seq=0 ttl=64 time=0.066 ms
+64 bytes from 192.168.97.3: seq=1 ttl=64 time=0.071 ms
+--- cache ping statistics ---
+2 packets transmitted, 2 packets received, 0% packet loss
+
+$ docker compose exec web nc -zv cache 6379
+cache (192.168.97.3:6379) open
+```
+
+**관찰**: `cache`라는 서비스 이름이 실제 컨테이너의 IP(`192.168.97.3`)로 자동 해석(DNS)됐고, ping과
+redis 포트(6379) 접속까지 성공했다. 컨테이너 IP는 재시작할 때마다 바뀔 수 있지만, compose 네트워크의
+서비스 디스커버리 덕분에 코드/설정에서는 IP 대신 `cache`라는 이름만 알면 된다.

@@ -6,3 +6,9 @@ services:
       - "8080:80"
     environment:
       - SERVICE_NAME=web
+    depends_on:
+      - cache
+
+  cache:
+    image: redis:alpine
+    container_name: my-cache
