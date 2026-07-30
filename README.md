@@ -529,3 +529,49 @@ commit 738cd81 ...
   복원하고 `git commit --amend -m "..."`로 메시지만 교체(이때는 staging area가 비어 있어 내용이 섞이지
   않음)했다. 이어서 `git cherry-pick --no-commit <원본 B 해시>`로 B의 변경사항만 다시 가져와 별도 커밋으로
   분리했다. 교훈: 커밋을 amend하기 전에는 반드시 `git status`로 staging area가 비어 있는지 먼저 확인한다.
+
+## 13. 보너스
+
+- [x] Compose 기초 (단일 서비스)
+- [ ] Compose 멀티 컨테이너 + 네트워크 통신
+- [ ] Compose 운영 명령 (up/down/ps/logs)
+- [ ] 환경 변수로 포트/모드 변경
+- [ ] GitHub SSH 키 설정
+
+### 13-A. Compose 기초 (단일 서비스)
+
+기존 `Dockerfile`을 그대로 빌드 소스로 사용하는 `web` 서비스 하나만 정의했다.
+
+`docker-compose.yml`:
+
+```yaml
+services:
+  web:
+    build: .
+    container_name: my-web
+    ports:
+      - "8080:80"
+    environment:
+      - SERVICE_NAME=web
+```
+
+```bash
+$ docker compose up -d --build
+ codyssey_w1-web  Built
+ Network codyssey_w1_default  Created
+ Container my-web  Started
+
+$ docker compose ps
+NAME     IMAGE             COMMAND                   SERVICE   STATUS         PORTS
+my-web   codyssey_w1-web   "/docker-entrypoint..."   web       Up             0.0.0.0:8080->80/tcp
+
+$ curl -s http://localhost:8080
+...
+	<h1>커스텀 NGINX 페이지</h1>
+	<p>포트 매핑 증거: 8080:80</p>
+</body>
+</html>
+```
+
+**배운 점**: `docker run -p 8080:80 my-web:1.0` 같은 1회성 실행 명령이 `docker-compose.yml`이라는
+파일 하나로 문서화되어, 누구나 같은 명령(`docker compose up`) 한 번으로 동일한 환경을 재현할 수 있게 된다.

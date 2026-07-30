@@ -1,0 +1,8 @@
+services:
+  web:
+    build: .
+    container_name: my-web
+    ports:
+      - "8080:80"
+    environment:
+      - SERVICE_NAME=web
