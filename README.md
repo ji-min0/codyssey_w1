@@ -12,6 +12,7 @@
 | 항목 | 값 |
 |---|---|
 | OS | macOS 15.7.4 (Build 24G517) |
+| 터미널 | VSCode 내장 터미널 |
 | Shell | /bin/zsh |
 | Docker | 28.5.2, build ecc6942 (OrbStack 기반) |
 | Docker Compose | v2.40.3 |
@@ -508,6 +509,9 @@ commit 738cd81 ...
 - **해결/대안**: 메인 프로세스를 `bash`로 바꿔(`docker run -dit ubuntu bash`) `attach` 후 `exit` 명령으로
   종료 → 컨테이너가 정상적으로 `Exited` 상태가 됨을 확인. 동일 컨테이너에 `exec -it ... exit`을 했을 때는
   컨테이너가 살아있는 것과 비교해 attach/exec의 차이를 확인했다. (관련 캡처: 7번 섹션)
+
+문제 발생 시점(전) 캡처: [docs/images/troubleshooting/docker_container_is_running.png](docs/images/troubleshooting/docker_container_is_running.png)
+해결 후(후) 캡처: [docs/images/troubleshooting/docker_attach.png](docs/images/troubleshooting/docker_attach.png)
 
 ### 트러블슈팅 2: `git commit --amend`가 서로 다른 두 커밋을 하나로 합쳐버림
 
