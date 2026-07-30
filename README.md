@@ -49,7 +49,7 @@ Docker version 28.5.2, build ecc6942
 - [x] 포트 매핑 브라우저 접속 증거
 - [ ] 바인드 마운트 전/후 비교 (진행 예정)
 - [ ] Docker 볼륨 영속성 검증 (진행 예정)
-- [ ] Git 사용자 정보 명시적 설정 + `git config --list` 기록 (진행 예정)
+- [x] Git 사용자 정보 명시적 설정 + `git config --list` 기록
 - [x] VSCode에서 GitHub 로그인 및 저장소 연동
 - [x] 트러블슈팅 1건 이상 기록 (2건 목표, 1건 완료)
 
@@ -394,16 +394,35 @@ $ docker run -it --name vol-test2 -v my-data:/data ubuntu bash
 
 ## 11. Git / GitHub / VSCode 연동
 
-> TODO — `git config --global user.name/user.email/init.defaultBranch`를 명시적으로 설정한 뒤
-> `git config --list` 결과를 기록한다. (현재 커밋은 `강지민 <k.jimin20022503@c5r5s7.codyssey.kr>`로
-> 호스트네임 기반 자동 설정 상태이며, 이메일은 학교 발급 계정이라 별도 마스킹 없이 사용)
+`user.name`, `user.email`, `init.defaultBranch`를 명시적으로 설정했다. 이메일은 개인정보 노출을 피하기 위해
+GitHub가 제공하는 noreply 주소(`{GitHub user id}+{username}@users.noreply.github.com`)를 사용했다 —
+실제 개인 이메일이 커밋 기록에 남지 않으면서도 GitHub 계정과는 정상적으로 연결된다.
 
 ```bash
-$ git config --global user.name "<이름>"
-$ git config --global user.email "<이메일>"
+$ git config --global user.name "강지민"
+$ git config --global user.email "225418468+ji-min0@users.noreply.github.com"
 $ git config --global init.defaultBranch main
+
 $ git config --list
+credential.helper=osxkeychain
+user.name=강지민
+user.email=225418468+ji-min0@users.noreply.github.com
+init.defaultbranch=main
+core.repositoryformatversion=0
+core.filemode=true
+core.bare=false
+core.logallrefupdates=true
+core.ignorecase=true
+core.precomposeunicode=true
+remote.origin.url=https://github.com/ji-min0/codyssey_w1.git
+remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
+branch.main.remote=origin
+branch.main.merge=refs/heads/main
 ```
+
+> 참고: 이 설정 이전에 만든 과거 커밋들의 작성자 정보는 호스트네임 기반 자동 설정 값(`강지민
+> <k.jimin20022503@...codyssey.kr>`) 그대로 남아있다. 과거 히스토리를 다시 쓰지는 않았고,
+> 이 설정 이후의 신규 커밋부터 위 GitHub noreply 이메일로 기록된다.
 
 VSCode에서 GitHub 로그인 후 커밋/푸시가 정상 동작함을 확인:
 
