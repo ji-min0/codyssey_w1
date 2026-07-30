@@ -46,7 +46,7 @@ Docker version 28.5.2, build ecc6942
 - [x] `ubuntu` 컨테이너 진입 및 명령 실행
 - [x] attach vs exec 차이 관찰
 - [x] Dockerfile 기반 커스텀 이미지 (nginx:alpine + 정적 콘텐츠)
-- [ ] 포트 매핑 브라우저 접속 증거 (진행 예정)
+- [x] 포트 매핑 브라우저 접속 증거
 - [ ] 바인드 마운트 전/후 비교 (진행 예정)
 - [ ] Docker 볼륨 영속성 검증 (진행 예정)
 - [ ] Git 사용자 정보 명시적 설정 + `git config --list` 기록 (진행 예정)
@@ -330,21 +330,41 @@ ENV SERVICE_NAME=web
 
 ```bash
 $ docker build -t my-web:1.0 .
-$ docker images   # my-web:1.0 생성 확인
-$ docker run -d --name my-web -p 8080:80 my-web:1.0
-$ docker ps       # my-web 실행 확인
-```
+...
+#6 [2/2] COPY app/index.html /usr/share/nginx/html/index.html
+#7 exporting to image
+#7 writing image sha256:623c35ae937632041870c577bcbea1467f7a71af26d8620b7831b61ccc822930 done
+#7 naming to docker.io/library/my-web:1.0 done
 
-> TODO: 위 빌드/실행 결과 캡처 및 링크 추가 예정
+$ docker images
+REPOSITORY   TAG   IMAGE ID       CREATED         SIZE
+my-web       1.0   623c35ae9376   8 seconds ago   62.4MB
+
+$ docker run -d --name my-web -p 8080:80 my-web:1.0
+89a31357ba27f21ce1f7e9869eb4a1b859f7195ba9e41cc5ba855cbff18f413a
+
+$ docker ps --filter name=my-web
+CONTAINER ID   IMAGE        COMMAND                  STATUS                  PORTS                          NAMES
+89a31357ba27   my-web:1.0   "/docker-entrypoint..."  Up Less than a second   0.0.0.0:8080->80/tcp           my-web
+```
 
 ## 9. 포트 매핑 접속 증거
 
-> TODO — `-p <host_port>:<container_port>`로 실행 후, 주소창(포트 포함)이 보이는 브라우저 스크린샷을 첨부한다.
-> `curl http://localhost:8080` 결과도 함께 남긴다.
+`-p 8080:80`으로 실행한 뒤 `curl`과 브라우저로 각각 접속을 확인했다.
 
 ```bash
 $ curl http://localhost:8080
+<!DOCTYPE html>
+<html lang="ko">
+...
+	<h1>커스텀 NGINX 페이지</h1>
+	<p>이 페이지는 Docker 컨테이너에서 실행되는 NGINX 서버의 커스텀 페이지입니다.</p>
+	<p>포트 매핑 증거: 8080:80</p>
+</body>
+</html>
 ```
+
+![포트 매핑 접속 성공](docs/images/port-mapping.png)
 
 ## 10. 바인드 마운트 & 볼륨 영속성 검증
 
