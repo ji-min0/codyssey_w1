@@ -3,9 +3,10 @@ services:
     build: .
     container_name: my-web
     ports:
-      - "8080:80"
+      - "${WEB_PORT:-8080}:80"
     environment:
       - SERVICE_NAME=web
+      - NGINX_ENTRYPOINT_QUIET_LOGS=${NGINX_ENTRYPOINT_QUIET_LOGS}
     depends_on:
       - cache
 

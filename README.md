@@ -535,7 +535,7 @@ commit 738cd81 ...
 - [x] Compose 기초 (단일 서비스)
 - [x] Compose 멀티 컨테이너 + 네트워크 통신
 - [x] Compose 운영 명령 (up/down/ps/logs)
-- [ ] 환경 변수로 포트/모드 변경
+- [x] 환경 변수로 포트/모드 변경
 - [ ] GitHub SSH 키 설정
 
 ### 13-A. Compose 기초 (단일 서비스)
@@ -655,3 +655,55 @@ NAME   IMAGE   COMMAND   SERVICE   CREATED   STATUS   PORTS
 **정리한 운영 루틴**: `up -d`(기동) → `ps`(살아있는지 확인) → `logs`(정상 동작/에러 확인) → 필요시
 `down`(컨테이너+네트워크까지 한 번에 정리). 개별 컨테이너를 `docker stop/rm`으로 하나씩 정리하는 대신,
 compose 단위로 전체 스택의 상태를 일관되게 확인·정리할 수 있었다.
+
+### 13-D. 환경 변수로 포트/모드 변경
+
+`.env` 파일로 포트와 nginx 로그 모드를 코드 변경 없이 바꿀 수 있게 분리했다.
+
+`.env`:
+```
+WEB_PORT=8080
+NGINX_ENTRYPOINT_QUIET_LOGS=
+```
+
+`docker-compose.yml` (해당 부분):
+```yaml
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    environment:
+      - SERVICE_NAME=web
+      - NGINX_ENTRYPOINT_QUIET_LOGS=${NGINX_ENTRYPOINT_QUIET_LOGS}
+```
+
+**실행 1 — 기본값(포트 8080, verbose 모드)**:
+
+```bash
+$ docker compose up -d
+$ curl -s -o /dev/null -w "http_status=%{http_code} port=8080\n" http://localhost:8080
+http_status=200 port=8080
+
+$ docker logs my-web 2>&1 | grep -c "docker-entrypoint.sh"
+7   # entrypoint 준비 로그가 그대로 출력됨 (verbose)
+```
+
+**실행 2 — `.env`만 바꿔서 포트/모드 전환 (코드 변경 없음)**:
+
+```bash
+# .env
+WEB_PORT=9090
+NGINX_ENTRYPOINT_QUIET_LOGS=1
+
+$ docker compose up -d
+$ curl -s -o /dev/null -w "http_status=%{http_code} port=9090\n" http://localhost:9090
+http_status=200 port=9090
+
+$ curl -s -o /dev/null -w "http_status=%{http_code} port=8080\n" --max-time 2 http://localhost:8080
+http_status=000 port=8080   # 기존 포트는 더 이상 매핑되지 않음
+
+$ docker logs my-web 2>&1 | grep -c "docker-entrypoint.sh"
+0   # NGINX_ENTRYPOINT_QUIET_LOGS=1 → entrypoint 로그가 억제됨 (quiet)
+```
+
+**관찰**: `docker-compose.yml`이나 `Dockerfile`을 전혀 건드리지 않고 `.env` 값만 바꿔서 노출 포트와
+nginx 실행 로그 모드(verbose/quiet)를 동시에 바꿀 수 있었다. 설정값이 이미지/코드에서 분리되어 있으면,
+같은 이미지를 다른 환경(dev/staging/prod)에 재사용하기 쉬워진다.
