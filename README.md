@@ -536,7 +536,7 @@ commit 738cd81 ...
 - [x] Compose 멀티 컨테이너 + 네트워크 통신
 - [x] Compose 운영 명령 (up/down/ps/logs)
 - [x] 환경 변수로 포트/모드 변경
-- [ ] GitHub SSH 키 설정
+- [x] GitHub SSH 키 설정
 
 ### 13-A. Compose 기초 (단일 서비스)
 
@@ -707,3 +707,29 @@ $ docker logs my-web 2>&1 | grep -c "docker-entrypoint.sh"
 **관찰**: `docker-compose.yml`이나 `Dockerfile`을 전혀 건드리지 않고 `.env` 값만 바꿔서 노출 포트와
 nginx 실행 로그 모드(verbose/quiet)를 동시에 바꿀 수 있었다. 설정값이 이미지/코드에서 분리되어 있으면,
 같은 이미지를 다른 환경(dev/staging/prod)에 재사용하기 쉬워진다.
+
+### 13-E. GitHub SSH 키 설정
+
+HTTPS 대신 SSH로 인증하도록 전환했다.
+
+```bash
+$ ssh-keygen -t ed25519 -C "225418468+ji-min0@users.noreply.github.com" -f ~/.ssh/id_ed25519_github -N ""
+# ~/.ssh/config 에 github.com 전용 IdentityFile 등록
+
+# 공개키를 GitHub → Settings → SSH and GPG keys 에 등록 후:
+$ ssh -T git@github.com
+Hi ji-min0! You've successfully authenticated, but GitHub does not provide shell access.
+
+$ git remote set-url origin git@github.com:ji-min0/codyssey_w1.git
+$ git remote -v
+origin  git@github.com:ji-min0/codyssey_w1.git (fetch)
+origin  git@github.com:ji-min0/codyssey_w1.git (push)
+
+$ git ls-remote origin
+18e155d5af4b11d2ecacc00974badcbb5384d01f  HEAD
+18e155d5af4b11d2ecacc00974badcbb5384d01f  refs/heads/main
+```
+
+**관찰**: HTTPS 방식은 매번(또는 credential helper 캐시가 만료될 때마다) 개인 액세스 토큰/비밀번호를
+입력해야 하지만, SSH는 미리 등록한 키 쌍으로 자동 인증된다. 개인키(`~/.ssh/id_ed25519_github`)는
+로컬에만 남고 GitHub에는 공개키만 전달되므로, 저장소나 커밋 어디에도 비밀값이 남지 않는다.
