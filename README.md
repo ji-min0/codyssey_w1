@@ -54,7 +54,43 @@ Docker version 28.5.2, build ecc6942
 - [x] VSCode에서 GitHub 로그인 및 저장소 연동
 - [x] 트러블슈팅 2건 이상 기록
 
-## 4. 터미널 조작 로그
+## 4. 프로젝트 디렉토리 구조
+
+최상위 폴더를 **코드(실행 대상) / 설정(빌드·실행 정의) / 증거(검증 캡처)** 3영역으로 나눠서 구성했다.
+어떤 파일이 무엇을 위해 존재하는지가 폴더 위치만으로 구분되게 하는 것이 기준이다.
+
+```
+codyssey_w1/
+├─ app/
+│  └─ index.html            # 이미지에 COPY되는 정적 콘텐츠 — 빌드 결과물의 일부
+├─ docs/
+│  └─ images/                # 단계별 실행 증거 캡처
+│     └─ troubleshooting/    # 트러블슈팅 전/후 비교 캡처
+├─ Dockerfile                 # nginx:alpine 베이스 커스텀 이미지 빌드 정의
+├─ docker-compose.yml         # web/cache 서비스, 네트워크, 포트/볼륨 실행 정의
+├─ .env                       # 포트·로그 모드 값 — 코드/설정 분리(§14-D)
+├─ .gitignore
+└─ README.md                  # 실행 로그와 검증 근거를 정리한 문서
+```
+
+| 경로 | 역할 | 여기 있는 이유 |
+|---|---|---|
+| `app/` | 컨테이너 안에 들어갈 실제 콘텐츠 | Dockerfile의 `COPY` 대상과 소스를 한곳에 모아, 이미지 안 경로(`/usr/share/nginx/html`)와 호스트 쪽 소스 경로를 분리 |
+| `Dockerfile` | 이미지 빌드 정의 | 빌드 관련 파일을 루트에 둬 `docker build .` 컨텍스트를 단순하게 유지 |
+| `docker-compose.yml` / `.env` | 실행·설정 정의 | 포트·환경변수 같은 "값"은 `.env`로 빼서, `docker-compose.yml`(구조)과 `.env`(값)를 분리 — 같은 구조로 다른 환경을 재현 가능 |
+| `docs/images/` | 검증 증거 | 코드·설정과 섞이지 않도록 캡처는 별도 폴더에 모으고, README 각 절에서 상대경로로 링크 |
+
+**재현 가이드** (클론 직후 최소 명령):
+
+```bash
+$ git clone git@github.com:ji-min0/codyssey_w1.git && cd codyssey_w1
+$ docker compose up -d --build      # web(nginx) + cache(redis) 기동
+$ curl -s http://localhost:${WEB_PORT:-8080}   # 정상 응답(200) 확인
+```
+
+`.env`의 `WEB_PORT` 값만 바꾸면 이미지 재빌드 없이 `docker compose up -d`만 다시 실행해도 새 포트로 재현된다(§14-D 참고).
+
+## 5. 터미널 조작 로그
 
 기본 명령(현재 위치 확인 → 목록 확인(숨김 파일 포함) → 생성/이동 → 파일 내용 확인/생성 → 복사 → 이름변경 → 삭제) 흐름:
 
@@ -99,7 +135,7 @@ drwx------+ 6 k.jimin20022503  k.jimin20022503  192  7 29 10:50 ..
 **절대 경로**다. 반면 `cd dir1`이나 `mv memo_cp.txt rename.txt`에서 쓰인 `dir1`, `memo_cp.txt`는 **현재 위치를
 기준으로 한 상대 경로**로, 같은 파일이라도 실행 위치가 바뀌면 다른 결과를 가리킬 수 있다.
 
-## 5. 권한 실습 (파일 1개 + 디렉토리 1개, 전/후 비교)
+## 6. 권한 실습 (파일 1개 + 디렉토리 1개, 전/후 비교)
 
 ```bash
 $ ls -l
@@ -130,7 +166,7 @@ r=4, w=2, x=1의 합으로 표현된다. `644`는 `rw-r--r--` — 소유자는 �
 `755`는 `rwxr-xr-x` — 소유자는 읽기/쓰기/실행(7), 그룹과 기타는 읽기/실행(5)만 가능하다. 디렉토리의 실행(x)
 권한은 "그 디렉토리 안으로 들어갈 수 있는지"를 의미한다.
 
-## 6. Docker 설치 · 점검 · 운영 로그
+## 7. Docker 설치 · 점검 · 운영 로그
 
 ### 설치/점검
 
@@ -236,7 +272,7 @@ CONTAINER ID   IMAGE   COMMAND   CREATED   STATUS   PORTS   NAMES
 
 캡처: [docs/images/docker_stop.png](docs/images/docker_stop.png)
 
-## 7. 컨테이너 실습 (hello-world / ubuntu / attach vs exec)
+## 8. 컨테이너 실습 (hello-world / ubuntu / attach vs exec)
 
 ### hello-world
 
@@ -298,9 +334,24 @@ cddca44bc1e5   ubuntu    "bash"    About a minute ago  Exited (0) 3 seconds ago 
 | `docker attach <c>` | 컨테이너의 **메인 프로세스(PID 1)** | 메인 프로세스 종료 = 컨테이너 종료(Exited) |
 
 이 차이를 발견하게 된 과정(원래는 `sleep 3600`을 메인 프로세스로 두고 `attach` 후 Ctrl+C로 테스트했다가
-컨테이너가 죽지 않아 당황했던 경험)은 12번 트러블슈팅 항목에 별도로 정리했다.
+컨테이너가 죽지 않아 당황했던 경험)은 13번 트러블슈팅 항목에 별도로 정리했다.
 
-## 8. Dockerfile 기반 커스텀 이미지 제작
+## 9. Dockerfile 기반 커스텀 이미지 제작
+
+### 이미지와 컨테이너의 차이
+
+| 관점 | 이미지 (Image) | 컨테이너 (Container) |
+|---|---|---|
+| 정의 | 읽기 전용 레이어가 쌓인 **템플릿** | 이미지 위에 쓰기 가능한 레이어를 얹어 **실행 중인 프로세스** |
+| 생성 명령 | `docker build` | `docker run` |
+| 변경 가능성 | 불변(immutable) — 내용을 바꾸려면 다시 빌드 | 내부 파일 변경 가능, 단 변경은 컨테이너 자신의 쓰기 레이어에만 기록 |
+| 생명주기 | 삭제하기 전까지 영구, 컨테이너와 독립 | 실행~삭제까지, `docker rm` 하면 쓰기 레이어까지 함께 소멸 |
+| 관계 | 이미지 1개로 컨테이너 여러 개를 각각 독립적으로 실행 가능 | 컨테이너는 항상 특정 이미지 하나에서 파생 |
+
+이 프로젝트에서 `my-web:1.0`은 불변 템플릿이고, 그로부터 실행한 `my-web` 컨테이너를 지웠다가 같은
+이미지로 다시 `docker run`해도 항상 같은 시작 상태(커스텀 `index.html`이 반영된 상태)에서 출발한다.
+반대로 컨테이너를 지운 뒤에도 남아야 하는 데이터(§11-B의 `proof.txt`)는 이미지가 아니라 **볼륨**에
+넣어 컨테이너의 생명주기와 분리했다.
 
 - **선택한 기존 베이스**: (A) 웹 서버 베이스 이미지 활용 — `nginx:alpine` 공식 이미지
 - **커스텀 포인트**
@@ -349,7 +400,27 @@ CONTAINER ID   IMAGE        COMMAND                  STATUS                  POR
 89a31357ba27   my-web:1.0   "/docker-entrypoint..."  Up Less than a second   0.0.0.0:8080->80/tcp           my-web
 ```
 
-## 9. 포트 매핑 접속 증거
+## 10. 포트 매핑 접속 증거
+
+### 왜 포트를 명시적으로 매핑해야 하는가
+
+컨테이너는 호스트와 분리된 **네트워크 네임스페이스**를 갖는다. 컨테이너 안의 80번 포트는 그
+네임스페이스 안에서만 유효한 주소라서, 호스트에서는 기본적으로 보이지도 접근되지도 않는다.
+`-p 8080:80`처럼 호스트 포트 → 컨테이너 포트를 명시적으로 연결(포트 포워딩)해야만 호스트에서
+접근할 수 있다.
+
+이 격리는 보안 관점에서도 의미가 있다 — **필요한 포트만 최소로 노출**할 수 있기 때문이다. 실제로
+`docker-compose.yml`의 `cache`(redis) 서비스는 `web`과 같은 네트워크 안에서 서비스 이름으로는
+접근 가능하지만(§14-B), `ports:`를 지정하지 않아 호스트에는 전혀 노출되지 않는다. redis는 웹
+컨테이너만 접근하면 되는 내부 전용 서비스이기 때문에, 굳이 호스트 포트를 열어 외부 공격 표면을
+늘리지 않은 것이다.
+
+```yaml
+  cache:
+    image: redis:alpine
+    container_name: my-cache
+    # ports: 없음 — 호스트에는 의도적으로 노출하지 않음, web 컨테이너만 내부망(6379)으로 접근
+```
 
 `-p 8080:80`으로 실행한 뒤 `curl`과 브라우저로 각각 접속을 확인했다.
 
@@ -367,9 +438,35 @@ $ curl http://localhost:8080
 
 ![포트 매핑 접속 성공](docs/images/port-mapping.png)
 
-## 10. 바인드 마운트 & 볼륨 영속성 검증
+### 포트 충돌 진단 절차
 
-### 10-A. 바인드 마운트 (호스트 변경 → 컨테이너 재시작 없이 즉시 반영 확인)
+Docker의 "포트 사용 중" 에러는 실제로 두 가지 원인으로 나뉜다.
+
+1. **에러 메시지로 원인 구분**
+   - `Bind for 0.0.0.0:8080 failed: port is already allocated` → **Docker가 관리하는 다른 컨테이너**가
+     이미 그 포트를 쓰고 있음 (도커 레벨)
+   - `listen tcp4 0.0.0.0:8080: bind: address already in use` → **호스트 OS의 다른 프로세스**가 이미 그
+     포트를 리슨 중 (OS 레벨 — 도커 데몬조차 포트를 열지 못한 상태)
+
+2. **점유 주체 확인**
+   ```bash
+   $ docker ps --filter "publish=8080"    # 도커 컨테이너가 물고 있는지
+   $ lsof -nP -iTCP:8080 -sTCP:LISTEN      # 호스트 프로세스(PID·이름)가 물고 있는지
+   ```
+   (macOS에서는 ControlCenter의 AirPlay 수신 기능이 5000·7000번대를 기본으로 점유하는 경우가 흔하다.)
+
+3. **대응**: 내가 띄워두고 잊은 컨테이너면 `docker stop`/`docker rm` 후 재시도, 다른 앱이 정당하게
+   쓰는 포트면 굳이 죽이지 않고 내 쪽 매핑 포트만 바꾼다.
+
+4. **재검증**: `docker compose ps`의 `PORTS` 컬럼과 `curl -s -o /dev/null -w "%{http_code}"`로 새
+   포트가 실제로 응답하는지 확인.
+
+이 프로젝트는 포트 값을 `.env`의 `WEB_PORT`로 분리해 뒀기 때문에 3~4단계가 "코드 수정"이 아니라
+값 하나 교체 + `docker compose up -d` 재실행으로 끝난다 — 실제 전환 로그는 §14-D 참고.
+
+## 11. 바인드 마운트 & 볼륨 영속성 검증
+
+### 11-A. 바인드 마운트 (호스트 변경 → 컨테이너 재시작 없이 즉시 반영 확인)
 
 호스트의 디렉토리를 nginx 컨테이너에 마운트한 뒤, 컨테이너를 재시작하지 않고 호스트 파일만 수정해서
 바로 반영되는지 확인했다.
@@ -399,7 +496,7 @@ $ docker rm -f bind-web
 **관찰**: 바인드 마운트는 호스트 디렉토리를 컨테이너 내부 경로에 그대로 연결하는 방식이라, 컨테이너를
 재빌드·재시작하지 않고 호스트에서 파일만 바꿔도 즉시 반영된다.
 
-### 10-B. Docker 볼륨 (컨테이너 삭제 후에도 데이터 유지)
+### 11-B. Docker 볼륨 (컨테이너 삭제 후에도 데이터 유지)
 
 ```bash
 $ docker volume create my-data
@@ -438,7 +535,27 @@ $ docker volume rm my-data
 호스트 쪽에 별도로 관리하는 저장소라 컨테이너의 생명주기와 분리된다. `vol-test`를 완전히 삭제한 뒤에도
 동일한 볼륨을 연결한 `vol-test2`에서 같은 데이터를 그대로 읽을 수 있었다.
 
-## 11. Git / GitHub / VSCode 연동
+### 11-C. 볼륨 백업 전략
+
+볼륨은 컨테이너 삭제로부터는 안전하지만, 볼륨 자체가 백업은 아니다 — 볼륨이 저장된 호스트 영역이
+손상되거나 실수로 `docker volume rm`하면 데이터는 그대로 사라진다. 정말 보존해야 하는 데이터는
+별도 백업까지 고려해야 한다.
+
+```bash
+# 볼륨 내용을 호스트의 tar 파일로 백업
+$ docker run --rm -v my-data:/data -v "$(pwd)":/backup busybox \
+    tar czf /backup/my-data-backup.tar.gz -C /data .
+
+# 백업에서 새 볼륨으로 복원
+$ docker run --rm -v my-data-restored:/data -v "$(pwd)":/backup busybox \
+    tar xzf /backup/my-data-backup.tar.gz -C /data
+```
+
+또한 `docker compose down`은 기본적으로 컨테이너·네트워크만 정리하고 볼륨은 남기지만, `-v` 옵션을
+붙이면 볼륨까지 함께 삭제된다 — 이 차이를 모르면 "정리"가 곧 "데이터 삭제"가 될 수 있어, 습관적으로
+`down -v`를 쓰지 않는 것도 하나의 예방책이다.
+
+## 12. Git / GitHub / VSCode 연동
 
 `user.name`, `user.email`, `init.defaultBranch`를 명시적으로 설정했다. 이메일은 개인정보 노출을 피하기 위해
 GitHub가 제공하는 noreply 주소(`{GitHub user id}+{username}@users.noreply.github.com`)를 사용했다 —
@@ -496,7 +613,7 @@ commit 738cd81 ...
 
 캡처: [docs/images/github_vscode.png](docs/images/github_vscode.png), [docs/images/github_vsconde_commit_log.png](docs/images/github_vsconde_commit_log.png)
 
-## 12. 트러블슈팅
+## 13. 트러블슈팅
 
 ### 트러블슈팅 1: `docker attach` 후 Ctrl+C를 눌러도 컨테이너가 종료되지 않음
 
@@ -508,7 +625,7 @@ commit 738cd81 ...
   아니라 **docker CLI가 attach 연결을 강제로 끊었다는 뜻**이었다.
 - **해결/대안**: 메인 프로세스를 `bash`로 바꿔(`docker run -dit ubuntu bash`) `attach` 후 `exit` 명령으로
   종료 → 컨테이너가 정상적으로 `Exited` 상태가 됨을 확인. 동일 컨테이너에 `exec -it ... exit`을 했을 때는
-  컨테이너가 살아있는 것과 비교해 attach/exec의 차이를 확인했다. (관련 캡처: 7번 섹션)
+  컨테이너가 살아있는 것과 비교해 attach/exec의 차이를 확인했다. (관련 캡처: 8번 섹션)
 
 문제 발생 시점(전) 캡처: [docs/images/troubleshooting/docker_container_is_running.png](docs/images/troubleshooting/docker_container_is_running.png)
 해결 후(후) 캡처: [docs/images/troubleshooting/docker_attach.png](docs/images/troubleshooting/docker_attach.png)
@@ -530,7 +647,7 @@ commit 738cd81 ...
   않음)했다. 이어서 `git cherry-pick --no-commit <원본 B 해시>`로 B의 변경사항만 다시 가져와 별도 커밋으로
   분리했다. 교훈: 커밋을 amend하기 전에는 반드시 `git status`로 staging area가 비어 있는지 먼저 확인한다.
 
-## 13. 보너스
+## 14. 보너스
 
 - [x] Compose 기초 (단일 서비스)
 - [x] Compose 멀티 컨테이너 + 네트워크 통신
@@ -538,7 +655,7 @@ commit 738cd81 ...
 - [x] 환경 변수로 포트/모드 변경
 - [x] GitHub SSH 키 설정
 
-### 13-A. Compose 기초 (단일 서비스)
+### 14-A. Compose 기초 (단일 서비스)
 
 기존 `Dockerfile`을 그대로 빌드 소스로 사용하는 `web` 서비스 하나만 정의했다.
 
@@ -576,7 +693,7 @@ $ curl -s http://localhost:8080
 **배운 점**: `docker run -p 8080:80 my-web:1.0` 같은 1회성 실행 명령이 `docker-compose.yml`이라는
 파일 하나로 문서화되어, 누구나 같은 명령(`docker compose up`) 한 번으로 동일한 환경을 재현할 수 있게 된다.
 
-### 13-B. 멀티 컨테이너 + 네트워크 통신
+### 14-B. 멀티 컨테이너 + 네트워크 통신
 
 `web` 서비스에 `cache`(redis:alpine) 서비스를 추가했다. 두 서비스는 compose가 자동으로 만들어주는
 같은 브리지 네트워크에 속하므로, 서로 IP 대신 **서비스 이름**으로 통신할 수 있는지 확인했다.
@@ -629,7 +746,7 @@ cache (192.168.97.3:6379) open
 redis 포트(6379) 접속까지 성공했다. 컨테이너 IP는 재시작할 때마다 바뀔 수 있지만, compose 네트워크의
 서비스 디스커버리 덕분에 코드/설정에서는 IP 대신 `cache`라는 이름만 알면 된다.
 
-### 13-C. Compose 운영 명령 (up / ps / logs / down)
+### 14-C. Compose 운영 명령 (up / ps / logs / down)
 
 ```bash
 $ docker compose logs --tail=10 web
@@ -656,7 +773,7 @@ NAME   IMAGE   COMMAND   SERVICE   CREATED   STATUS   PORTS
 `down`(컨테이너+네트워크까지 한 번에 정리). 개별 컨테이너를 `docker stop/rm`으로 하나씩 정리하는 대신,
 compose 단위로 전체 스택의 상태를 일관되게 확인·정리할 수 있었다.
 
-### 13-D. 환경 변수로 포트/모드 변경
+### 14-D. 환경 변수로 포트/모드 변경
 
 `.env` 파일로 포트와 nginx 로그 모드를 코드 변경 없이 바꿀 수 있게 분리했다.
 
@@ -708,7 +825,7 @@ $ docker logs my-web 2>&1 | grep -c "docker-entrypoint.sh"
 nginx 실행 로그 모드(verbose/quiet)를 동시에 바꿀 수 있었다. 설정값이 이미지/코드에서 분리되어 있으면,
 같은 이미지를 다른 환경(dev/staging/prod)에 재사용하기 쉬워진다.
 
-### 13-E. GitHub SSH 키 설정
+### 14-E. GitHub SSH 키 설정
 
 HTTPS 대신 SSH로 인증하도록 전환했다.
 
